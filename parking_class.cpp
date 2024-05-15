@@ -54,9 +54,13 @@ ostream& operator<<(ostream& out, VehiclePlate plate) {
     return out;
 }
 
-// возьмите реализацию хешера из прошлого задания
 class VehiclePlateHasher {
-
+public:
+    size_t operator()(const VehiclePlate& plate) const {
+        return static_cast<size_t>(hash_(plate.ToString()));
+    }
+private:
+    hash<string> hash_;
 };
 
 // выбросьте это исключение в случае ошибки парковки
@@ -74,24 +78,63 @@ public:
 
     // запарковать машину с указанным номером
     void Park(VehiclePlate car) {
-        // место для вашей реализации
+        if(now_parked_.count(car) != 0){
+            throw ParkingException();
+        }
+
+        now_parked_[car] = TimePoint(Clock::now());
+
     }
 
     // забрать машину с указанным номером
     void Withdraw(const VehiclePlate& car) {
-        // место для вашей реализации
+        if(now_parked_.count(car) == 0){
+            throw ParkingException();
+        }
+
+        complete_parks_[car] = Clock::now() - now_parked_.at(car);
+        now_parked_.erase(car); 
     }
 
     // получить счёт за конкретный автомобиль
     int64_t GetCurrentBill(const VehiclePlate& car) const {
-        // место для вашей реализации
+        int64_t result = {0};
+        
+        if (now_parked_.count(car) || complete_parks_.count(car)) {
+        
+            if (now_parked_.count(car)) {
+                auto parking_finish = Clock::now();
+                auto parking_duration = parking_finish - now_parked_.at(car);
+                result += cost_per_second_ * chrono::duration_cast<chrono::seconds>(parking_duration).count();
+            }
+            
+            if (complete_parks_.count(car)) {
+                auto parking_duration_sec = chrono::duration_cast<chrono::seconds>(complete_parks_.at(car)).count();
+                result += cost_per_second_ *parking_duration_sec;
+            }    
+ 
+        } else {
+            return 0;
+        }
+        return result;
     }
 
     // завершить расчётный период
     // те машины, которые находятся на парковке на данный момент, должны 
     // остаться на парковке, но отсчёт времени для них начинается с нуля
     unordered_map<VehiclePlate, int64_t, VehiclePlateHasher> EndPeriodAndGetBills() {
-        // место для вашей реализации
+        unordered_map<VehiclePlate, int64_t, VehiclePlateHasher> ret_val;
+            for(auto& [car, start_time] : now_parked_){
+                ret_val[car] += chrono::duration_cast<chrono::seconds>(Clock::now() - now_parked_.at(car)).count() * cost_per_second_;
+                now_parked_[car] = TimePoint(Clock::now());
+            }
+
+            for(auto& [car, end_time] : complete_parks_){
+                ret_val[car] += chrono::duration_cast<chrono::seconds>(complete_parks_.at(car)).count() * cost_per_second_;
+            }
+            complete_parks_.clear();
+
+        return ret_val;
     }
 
     // не меняйте этот метод
